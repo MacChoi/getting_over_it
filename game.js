@@ -300,9 +300,9 @@ class Game {
         
         this.checkWallGrab();
         
-        // 현재 마우스 위치 가져오기 (이전 프레임의 마지막 마우스 X 사용)
+        // 현재 마우스 위치 가져오기 (이전 프레임의 마지막 마우스 X/Y 사용)
         const mouseX = this.player.lastMouseX; // mousemove에서 업데이트된 마지막 마우스 X
-        // const mouseY = ?; // 현재 mouseY는 update 함수 내에서 바로 사용되지 않음
+        const mouseY = this.player.lastMouseY; // mousemove에서 업데이트된 마지막 마우스 Y
 
         // 망치 끝의 현재 위치 계산
         const hammerBaseX = this.player.x;
@@ -311,7 +311,7 @@ class Game {
         const hammerEndY = hammerBaseY + Math.sin(this.player.hammerAngle) * this.player.hammerLength;
 
         let isDraggingOnTerrain = false;
-        let surfaceNormal = { x: 0, y: 0 }; // 지형 표면의 법선 벡터 (이동 방향 결정에 사용될 수 있음)
+        // let surfaceNormal = { x: 0, y: 0 }; // 지형 표면의 법선 벡터 (현재 사용되지 않음)
 
         // 망치 끝이 지형과 접촉하고 있는지 지속적으로 확인
         if (this.player.isHooked || this.player.isDangling) {
@@ -326,13 +326,16 @@ class Game {
                        isDraggingOnTerrain = true;
                        // TODO: 지형 표면의 법선 벡터 계산 로직 추가 (어떤 변에 충돌했는지 판단하여 방향 설정)
                        // 임시로 수평면 가정 (벽타기와 구분 필요)
-                       surfaceNormal = { x: 0, y: -1 }; // 예를 들어, 바닥에 접촉 시 법선은 위쪽
+                       // surfaceNormal = { x: 0, y: -1 }; // 예를 들어, 바닥에 접촉 시 법선은 위쪽
                        break; // 첫 번째 접촉한 장애물만 고려
                   }
              }
         }
 
         if (this.player.isHooked && this.player.isSwinging) {
+            // 중력 적용
+            this.player.velocity.y += 0.5; // 매달림/걸림 상태에서도 중력 적용
+
             const dx = this.player.x - this.player.hookPoint.x;
             const dy = this.player.y - this.player.hookPoint.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -342,26 +345,41 @@ class Game {
             // mousemove에서 마우스 움직임에 따라 velocity.x와 velocity.y에 힘이 가해지고 있음
             
             if (!isDraggingOnTerrain) {
-                 // 공중 스윙 중일 때: 걸린 지점 중심으로 원운동을 유지하고 마우스 수직 움직임으로 추진력 조절
-                 const targetX = this.player.hookPoint.x + Math.cos(angle) * this.player.hammerLength;
-                 const targetY = this.player.hookPoint.y + Math.sin(angle) * this.player.hammerLength;
+                 // 공중 스윙 중일 때: 걸린 지점 중심으로 원운동 유지 제약 및 마우스 수직 움직임으로 추진력 조절
+                 // 플레이어가 hookPoint에서 너무 멀리 떨어지지 않도록 제약
+                 const maxHookDistance = this.player.hammerLength + 5; // 걸릴 수 있는 최대 거리 (조절 가능)
                  
-                 const moveForceMagnitude = 0.5; // 원운동 유지 힘 조절
-                 this.player.velocity.x += (targetX - this.player.x) * moveForceMagnitude;
-                 // this.player.velocity.y += (targetY - this.player.y) * moveForceMagnitude; // 수직 원운동 유지는 마우스 움직임과 결합
+                 if (distance > maxHookDistance) {
+                      const targetX = this.player.hookPoint.x + Math.cos(angle) * maxHookDistance;
+                      const targetY = this.player.hookPoint.y + Math.sin(angle) * maxHookDistance;
 
-                 // 마우스 수직 움직임(mousemove에서 velocity.y에 이미 반영됨)을 이용한 추진력
-                 // velocity.y에 이미 더해진 값을 사용하거나, 여기서 다시 계산하여 추가
-                 // 여기서는 이미 더해진 velocity.y를 기반으로 추가적인 조정을 할 수 있음
-                 // 예: 위로 마우스 이동 시(velocity.y < 0) 중력 상쇄 또는 추가 상승 힘 적용
-                 // 현재는 mousemove에서 직접 velocity.y에 더하는 것으로 충분할 수 있음.
-                 // 만약 더 미세한 조절이 필요하다면 여기에 로직 추가.
+                      // 플레이어 위치를 제약 범위 안으로 조정
+                      this.player.x = targetX;
+                      this.player.y = targetY;
+
+                      // 속도 성분을 걸린 지점 방향과 접선 방향으로 분리하여 제약 적용
+                      const velocityMagnitude = Math.sqrt(this.player.velocity.x**2 + this.player.velocity.y**2);
+                      const velocityAngle = Math.atan2(this.player.velocity.y, this.player.velocity.x);
+                      const angleDiff = velocityAngle - angle; // 속도 방향과 걸린 지점 방향의 차이 각도
+
+                      // 걸린 지점 방향 속도 성분 (불필요한 움직임) 제거
+                      const radialVelocity = velocityMagnitude * Math.cos(angleDiff);
+                      this.player.velocity.x -= Math.cos(angle) * radialVelocity;
+                      this.player.velocity.y -= Math.sin(angle) * radialVelocity;
+
+                      // 접선 방향 속도 성분만 유지 (원운동 유지)
+                      // const tangentialVelocity = velocityMagnitude * Math.sin(angleDiff);
+                      // this.player.velocity.x = Math.cos(angle + Math.PI / 2) * tangentialVelocity; 
+                      // this.player.velocity.y = Math.sin(angle + Math.PI / 2) * tangentialVelocity;
+                      // mousemove에서 이미 속도가 가해지고 있으므로 추가적인 접선 속도 설정은 신중해야 함.
+                 }
+
+                 // 마우스 수직 움직임(mousemove에서 velocity.y에 이미 반영됨)을 이용한 추진력은 mousemove에서 처리.
 
             } else {
-                 // 지형 드래그 중일 때: 지형 표면을 따라 이동 (mousemove에서 수평 속도 이미 적용됨)
-                 // TODO: 지형 경사에 따라 수직 이동도 자연스럽게 발생하도록 velocity.y 조정
-                 // 현재는 mousemove에서 가해진 수평/수직 속도와 마찰력으로 이동
-                 // 필요하다면 여기에 지형 법선 벡터를 이용한 이동 로직 추가
+                 // 지형 드래그 중일 때: 지형 표면을 따라 이동 (mousemove에서 수평/수직 속도 이미 적용됨)
+                 // 중력은 계속 적용됨.
+                 // TODO: 지형 경사에 따라 이동 속도를 자연스럽게 조정하거나, 지형 법선 벡터를 이용한 이동 로직 개선 필요.
             }
 
         } else if (this.player.isDangling) {
@@ -389,7 +407,8 @@ class Game {
                  }
             } else {
                   // 지형 드래그 중일 때
-                  // mousemove에서 이미 velocity.x와 velocity.y에 힘이 가해졌으므로 추가적인 중력이나 제약 불필요
+                  // mousemove에서 이미 velocity.x와 velocity.y에 힘이 가해졌으므로 추가적인 제약은 불필요
+                  // 중력은 계속 적용됨.
                   // TODO: 지형 표면을 따라 미끄러지는 효과 등을 추가할 수 있음
             }
 
@@ -492,7 +511,7 @@ class Game {
                  const angleFromPlayerToObstacle = Math.atan2( (obstacle.y + obstacle.height/2) - this.player.y, (obstacle.x + obstacle.width/2) - this.player.x);
                  // const hammerObstacleAngleDiff = Math.abs(this.player.hammerAngle - angleFromPlayerToObstacle); // 사용하지 않으므로 제거 또는 주석 처리
 
-                 let forceMagnitude = 2; // 기본 힘 크기 다시 조정 (3 -> 2)
+                 let forceMagnitude = 1; // 기본 힘 크기 다시 조정 (2 -> 1) - 수평 반발력 감소
                  let forceAngle = this.player.hammerAngle + Math.PI; // 기본적으로 망치 방향의 반대로 밀림
 
                  // 이미지를 기반으로 특정 상황에 오른쪽으로 강하게 미는 로직 추가
@@ -501,19 +520,19 @@ class Game {
                      this.player.hammerAngle > 0 && this.player.hammerAngle < Math.PI / 2) { // 망치가 대략 아래-오른쪽을 향할 때 (0도에서 90도 사이)
 
                       forceAngle = 0; // 오른쪽 방향
-                      forceMagnitude = 8; // 강한 힘 적용 조정 (10 -> 8)
+                      forceMagnitude = 6; // 강한 힘 적용 조정 (8 -> 6) - 특정 상황 수평 반발력 감소
                       
                  } else if (this.player.hammerAngle > 0 && this.player.hammerAngle < Math.PI) { // 망치 각도가 아래쪽을 향할 때 (일반 찍기)
                       // 장애물이 플레이어보다 아래쪽에 있으면 (찍어 누르는 상황)
                       if (obstacle.y + obstacle.height > this.player.y) {
                            forceAngle = -Math.PI / 2; // 위쪽으로 힘
-                           forceMagnitude = 3; // 위쪽 힘 감소 (4 -> 3)
+                           forceMagnitude = 3; // 위쪽 힘은 유지 (이전과 동일)
                       }
                  }
                  
                  // 망치 속도에 비례하여 힘을 더 강하게
                  const currentVelocity = Math.sqrt(this.player.velocity.x * this.player.velocity.x + this.player.velocity.y * this.player.velocity.y);
-                 forceMagnitude += currentVelocity * 0.03; // 속도 비례 힘 감소 (0.05 -> 0.03)
+                 forceMagnitude += currentVelocity * 0.02; // 속도 비례 힘 감소 (0.03 -> 0.02) - 모든 방향 힘에 영향
 
                  this.player.velocity.x += Math.cos(forceAngle) * forceMagnitude;
                  this.player.velocity.y += Math.sin(forceAngle) * forceMagnitude;
@@ -561,8 +580,37 @@ class Game {
     }
 
     draw() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // 배경을 파란색으로 채우기
+        this.ctx.fillStyle = '#87CEEB'; // 푸른 하늘색
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // 구름 그리기 (임시 데이터)
+        const clouds = [
+            { x: 150, y: 80, size: 40 },
+            { x: 200, y: 60, size: 50 },
+            { x: 250, y: 70, size: 45 },
+            { x: 500, y: 100, size: 60 },
+            { x: 560, y: 90, size: 55 },
+            { x: 620, y: 110, size: 50 },
+            { x: 900, y: 50, size: 50 },
+            { x: 950, y: 70, size: 60 },
+            { x: 1000, y: 55, size: 55 },
+        ];
         
+        this.ctx.fillStyle = '#FFFFFF'; // 하얀색 구름
+        for (const cloud of clouds) {
+            // 간단하게 원으로 구름 표현
+            this.ctx.beginPath();
+            this.ctx.arc(cloud.x, cloud.y, cloud.size, 0, Math.PI * 2);
+            this.ctx.fill();
+             this.ctx.beginPath(); // 여러 개의 원을 겹쳐 구름 모양 만들기
+             this.ctx.arc(cloud.x + cloud.size * 0.6, cloud.y - cloud.size * 0.2, cloud.size * 0.7, 0, Math.PI * 2);
+             this.ctx.fill();
+             this.ctx.beginPath();
+             this.ctx.arc(cloud.x + cloud.size * 0.3, cloud.y + cloud.size * 0.4, cloud.size * 0.5, 0, Math.PI * 2);
+             this.ctx.fill();
+        }
+
         this.ctx.fillStyle = '#8B4513';
         for (const obstacle of this.obstacles) {
             this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
