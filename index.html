@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pot Climbing Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #87CEEB;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            display: none;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            background: #4CAF50;
+            border: none;
+            color: white;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div id="height">Height: 0m</div>
+        <div id="time">Time: 0s</div>
+    </div>
+    <div id="menu">
+        <h2>Pot Climbing Game</h2>
+        <button id="startButton">Start Game</button>
+        <button id="restartButton">Restart</button>
+        <button id="quitButton">Quit</button>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html> 
